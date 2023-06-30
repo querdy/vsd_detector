@@ -50,14 +50,14 @@
                 Stop Tasks
               </button>
             </div>
-            <div class="input-group m-1">
-              <button
-                  class="form-control btn btn-primary btn-sm"
-                  type="button"
-                  @click="get_report">
-                Получить отчет
-              </button>
-            </div>
+<!--            <div class="input-group m-1">-->
+<!--              <button-->
+<!--                  class="form-control btn btn-primary btn-sm"-->
+<!--                  type="button"-->
+<!--                  @click="get_report">-->
+<!--                Получить отчет-->
+<!--              </button>-->
+<!--            </div>-->
           </form>
         </div>
       </div>
@@ -96,7 +96,7 @@ const state = reactive({
 
 getIsRunVsdExam()
 
-const ws = new WebSocket("ws://localhost:8000/ws")
+const ws = new WebSocket("ws://boyara.space/ws")
 
 ws.onmessage = function (event) {
   let data = JSON.parse(event.data)
@@ -127,17 +127,6 @@ async function getIsRunVsdExam() {
   }
 }
 
-async function get_report() {
-  const response = await API.get('vetis/report', {responseType: "blob"})
-  if (response.status === 200) {
-    const urlFile = URL.createObjectURL(response.data);
-    const element = document.createElement('a');
-    element.setAttribute('href', urlFile);
-    element.setAttribute('download', 'report.xlsx');
-    element.dispatchEvent(new MouseEvent('click'));
-  }
-}
-
 async function run_vsd_exam() {
   state.isRunVsdExam = true
   let detectorFormData = new FormData();
@@ -150,38 +139,6 @@ async function run_vsd_exam() {
   }
   await getIsRunVsdExam()
 }
-
-async function me() {
-  await API.get("user/me")
-      .then((response => {
-        console.log(response)
-      }))
-      .catch(response => {
-        console.log(response)
-      })
-}
-
-async function authenticate() {
-  let userFormData = new FormData();
-  userFormData.append("user", JSON.stringify(state.user))
-  const response = await API.post(
-      'user/login',
-      userFormData,
-      {headers: {"Content-Type": "multipart/form-data"}}
-  )
-  if (response.status === 200) {
-    const token = response.data.accessToken
-    localStorage.setItem("JWT", token)
-    API.defaults.headers['Authorization'] = `Bearer ${token}`
-  }
-  if (response.status === 200) {
-    await API.get('/user/me').then((response) => {
-          state.activeUser = response.data.user
-        }
-    )
-  }
-}
-
 function addDocument(event) {
   state.uploadFile = event.target.files[0]
 }

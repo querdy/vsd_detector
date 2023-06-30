@@ -1,13 +1,15 @@
-import asyncio
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi.encoders import jsonable_encoder
 from fastapi_jwt_auth import AuthJWT
 from loguru import logger
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 from starlette.responses import JSONResponse, FileResponse
 
 from app import background_tasks
+from app.api_v1.crud.report import get_all_reports, get_report_by_uuid
 from app.api_v1.crud.user import get_vetis_auth_data_by_user_login
 from app.api_v1.schema.base import DateIntervalSchema
 from app.api_v1.schema.ws_message import LogMsgSchema
@@ -23,7 +25,8 @@ router = APIRouter(prefix="/vetis")
 
 
 @router.get("/cancel_tasks")
-async def cancel_tasks():
+async def cancel_tasks(authorize: AuthJWT = Depends()):
+    authorize.jwt_required()
     background_tasks.cancel_tasks()
     return JSONResponse(status_code=status.HTTP_200_OK, content={})
 
@@ -37,19 +40,43 @@ async def is_running():
 
 
 @router.get("/report")
-async def get_user(db: Session = Depends(get_db)):
-    create_report(db=db)
-    return FileResponse('report.xlsx', filename="report.xlsx", media_type="application/octet-stream")
+async def get_report(authorize: AuthJWT = Depends(), db: AsyncSession = Depends(get_db)):
+    # authorize.jwt_required()
+    await background_tasks.add_bg_task(
+        create_report,
+        db=db
+    )
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"detail": "Создание отчета запущено"})
+    # return FileResponse('report.xlsx', filename="report.xlsx", media_type="application/octet-stream")
+
+
+@router.get("/reports")
+async def get_reports_path(db: AsyncSession = Depends(get_db)):
+    reports = await get_all_reports(db=db)
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"detail": jsonable_encoder(reports)})
+
+
+@router.get("/report/{file_uuid}")
+async def get_report_file(file_uuid: int, db: AsyncSession = Depends(get_db)):
+    file = await get_report_by_uuid(db=db, uuid=file_uuid)
+    return FileResponse(
+        settings.BASE_DIR / settings.REPORT_ROOT / f"{file.filename}",
+        filename=file.filename,
+        media_type="application/octet-stream"
+    )
 
 
 @router.post('/run_enterprise_finder')
 async def run_enterprise_finder(file: UploadFile = File(),
                                 authorize: AuthJWT = Depends(),
-                                db: Session = Depends(get_db)
+                                db: AsyncSession = Depends(get_db)
                                 ):
     authorize.jwt_required()
     current_user = authorize.get_jwt_subject()
-    auth_data = get_vetis_auth_data_by_user_login(login=current_user, db=db)
+    auth_data = await get_vetis_auth_data_by_user_login(login=current_user, db=db)
+    # guids = await get_guids(file)
+    # df = pandas.read_excel(file, sheet_name=1, engine='openpyxl')
+    # guids = df['Идентификатор в системе (guid)'].to_list()
 
     if background_tasks.get_tasks():
         return JSONResponse(status_code=status.HTTP_423_LOCKED, content={
@@ -90,12 +117,11 @@ async def run_enterprise_finder(file: UploadFile = File(),
 async def run_document_checker(date_interval: DateIntervalSchema = Form(),
                                file: UploadFile = File(),
                                authorize: AuthJWT = Depends(),
-                               db: Session = Depends(get_db)
+                               db: AsyncSession = Depends(get_db)
                                ):
     authorize.jwt_required()
     current_user = authorize.get_jwt_subject()
-    auth_data = get_vetis_auth_data_by_user_login(login=current_user, db=db)
-
+    auth_data = await get_vetis_auth_data_by_user_login(login=current_user, db=db)
     if background_tasks.get_tasks():
         return JSONResponse(status_code=status.HTTP_423_LOCKED, content={
             "detail": "Нельзя запустить две операции одновременно"
@@ -137,12 +163,11 @@ async def run_document_checker(date_interval: DateIntervalSchema = Form(),
 @router.post('/run_document_examinator_without_xlsx')
 async def run_document_checker(date_interval: DateIntervalSchema = Form(),
                                authorize: AuthJWT = Depends(),
-                               db: Session = Depends(get_db)
+                               db: AsyncSession = Depends(get_db)
                                ):
     authorize.jwt_required()
     current_user = authorize.get_jwt_subject()
-    auth_data = get_vetis_auth_data_by_user_login(login=current_user, db=db)
-
+    auth_data = await get_vetis_auth_data_by_user_login(login=current_user, db=db)
     if background_tasks.get_tasks():
         return JSONResponse(status_code=status.HTTP_423_LOCKED, content={
             "detail": "Нельзя запустить две операции одновременно"

@@ -1,28 +1,33 @@
 <template class="container">
   <div class="row mw-100">
-    <div class="col-md-7 col-lg-5 col-xl-5 offset-xl-1">
-      <div class="d-flex justify-content-center">
-        <div class="progress m-1" role="progressbar" aria-label="Progress" aria-valuenow={{state.progress}} aria-valuemin="0" aria-valuemax="100" style="width: 20rem">
-          <div class="progress-bar progress-bar-striped progress-bar-animated" :style="{width: state.progress + '%'}">
-            <div class="mx-1" v-if="state.progress >= 15">{{ state.progress }}%</div>
+    <div class="col-md-7 col-lg-5 col-xl-5">
+      <div class="row d-flex justify-content-center">
+        <div class="col-5">
+          <div class="progress m-1" role="progressbar" aria-label="Progress" aria-valuenow={{state.progress}}
+               aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" :style="{width: state.progress + '%'}">
+              <div class="mx-1" v-if="state.progress >= 15">{{ state.progress }}%</div>
+            </div>
+            <div class="mx-1" v-if="state.progress < 15 & state.progress > 0">{{ state.progress }}%</div>
           </div>
-          <div class="mx-1" v-if="state.progress < 15 & state.progress > 0">{{ state.progress }}%</div>
         </div>
       </div>
-      <div class="d-flex justify-content-center">
-        <form id="finder">
-          <div class="form-outline m-1">
-            <input class="form-control" type="file" @change="addDocument" accept=".xlsx"/>
-          </div>
-          <div class="form-outline m-1">
-            <button v-if="state.isRunVsdExam" class="form-control btn btn-primary btn-sm" type="button" disabled>Run ent. find</button>
-            <button v-else class="form-control btn btn-primary btn-sm" type="button" @click="run_enterprise_finder">Run ent. find</button>
-          </div>
-          <div class="form-outline m-1">
-            <button v-if="state.isRunVsdExam" class="form-control btn btn-danger btn-sm" type="button" @click="stopTasks">Stop Tasks</button>
-            <button v-else class="form-control btn btn-danger btn-sm" type="button" disabled>Stop Tasks</button>
-          </div>
-        </form>
+      <div class="row d-flex justify-content-center">
+        <div class="col-5">
+          <form>
+            <div class="form-outline m-1">
+              <input class="form-control" type="file" @change="addDocument" accept=".xlsx"/>
+            </div>
+            <div class="form-outline m-1">
+              <button v-if="state.isRunVsdExam" class="form-control btn btn-primary btn-sm" type="button" disabled>Run ent. find</button>
+              <button v-else class="form-control btn btn-primary btn-sm" type="button" @click="run_enterprise_finder">Run ent. find</button>
+            </div>
+            <div class="form-outline m-1">
+              <button v-if="state.isRunVsdExam" class="form-control btn btn-danger btn-sm" type="button" @click="stopTasks">Stop Tasks</button>
+              <button v-else class="form-control btn btn-danger btn-sm" type="button" disabled>Stop Tasks</button>
+            </div>
+          </form>
+        </div>
       </div>
       <div class="m-1 d-flex justify-content-center">
         <img v-if="state.isRunVsdExam" src="@/assets/anime-hearts.gif" width="325" alt="eat">
@@ -59,7 +64,7 @@ const state = reactive({
 
 getIsTask()
 
-const ws = new WebSocket("ws://localhost:8000/ws")
+const ws = new WebSocket("ws://boyara.space/ws")
 
 ws.onmessage = function (event) {
   let data = JSON.parse(event.data)

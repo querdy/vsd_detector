@@ -84,7 +84,7 @@ class Mercury(Base):
             elif response.status == 'REJECTED':
                 logger.info(f'заявка отклонена appl. id - {application_id} - {response.errors.error[0]._value_1}')
                 raise VetisRejectedError('Заявка отклонена')
-            await asyncio.sleep(1)
+            # await asyncio.sleep(1)
 
     @_push
     def get_business_entity_user(self,
@@ -131,7 +131,7 @@ class Mercury(Base):
                                       begin_date: datetime.datetime,
                                       end_date: datetime.datetime,
                                       local_transaction_id: str = "Boyara©",
-                                      count: int = 1000,
+                                      count: int = 500,
                                       offset: int = 0
                                       ):
         _element = self.client_mercury.get_element('ns4:getVetDocumentChangesListRequest')

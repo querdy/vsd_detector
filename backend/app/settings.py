@@ -1,14 +1,18 @@
 import secrets
 from pathlib import Path
 
-from pydantic import BaseSettings
+from pydantic import BaseSettings, validator
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
     BASE_DIR = BASE_DIR
+    REPORT_URL: str = "/reports"
+    REPORT_ROOT: str = "reports"
+    REPORT_DIR: Path = BASE_DIR / "reports"
     API_V1_STR: str = "/api/v1"
-    DB_STRING: str = "postgresql://postgres:10120000@localhost/vsd_detector"
+    DB_STRING: str = "postgresql+asyncpg://postgres:10120000@localhost/vsd_detector"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 seconds * 60 minutes * 24 hours = 1 days
     ACCESS_TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 24

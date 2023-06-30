@@ -1,5 +1,8 @@
 import sys
 
+# import uvicorn
+# sys.path.append("/home/boyara/bsd_detector/vsd/")
+# sys.path.append("/home/boyara/www/vsd/")
 from fastapi import FastAPI
 from loguru import logger
 from starlette.middleware.cors import CORSMiddleware
@@ -16,7 +19,7 @@ from app.jwt_config import JWTSettings
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
-# logger.add("file_{time}.log", level="INFO")
+logger.add("file_{time}.log", level="INFO")
 
 app = FastAPI(
     title="Mercury_",
@@ -24,6 +27,11 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_STR}/docs",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
 )
+
+
+# @app.get('/')
+# async def dsd():
+#     return {'detail': 'hello world'}
 
 @AuthJWT.load_config
 def get_config():

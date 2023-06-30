@@ -12,11 +12,14 @@
           <router-link to="/enterprise_finder">Ent.finder</router-link>
         </li>
         <li class="nav-item mx-1">
-          <router-link to="/account">Account</router-link>
+          <router-link to="/report">Report</router-link>
         </li>
-        <li class="nav-item mx-1">
-          <router-link to="/help">Help</router-link>
-        </li>
+<!--        <li class="nav-item mx-1">-->
+<!--          <router-link to="/account">Account</router-link>-->
+<!--        </li>-->
+<!--        <li class="nav-item mx-1">-->
+<!--          <router-link to="/help">Help</router-link>-->
+<!--        </li>-->
       </ul>
     </nav>
 

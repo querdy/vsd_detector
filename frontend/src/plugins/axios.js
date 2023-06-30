@@ -14,4 +14,11 @@ const API = axios.create({
     // withCredentials: true
 });
 
+export const API_FILE = axios.create({
+    baseURL: process.env.VUE_APP_BASE_URL,
+    headers: {
+        'Authorization': `Bearer ${localStorage.getItem("JWT")}`,
+    }
+})
+
 export default API

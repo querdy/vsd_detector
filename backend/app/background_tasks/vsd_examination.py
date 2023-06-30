@@ -1,10 +1,7 @@
 import asyncio
 import datetime
-from asyncio import CancelledError
-
-from httpx import ReadTimeout
 from loguru import logger
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from zeep.exceptions import XMLParseError
 
 from app.api_v1.crud.enterprise import get_enterprises, save_enterprise
@@ -38,11 +35,11 @@ async def get_vet_documents(
         try:
             response = await vetis.mercury.get_finished_response()
             total_vsd = response.result._value_1.vetDocumentList.total
-            offset += 1000
+            offset += 500
             vet_documents = response.result._value_1.vetDocumentList.vetDocument
             yield vet_documents
         except (VetisBadServerError, VetisRejectedError):
-            offset += 1000
+            offset += 500
             yield []
 
 
@@ -50,10 +47,10 @@ async def backgraund_vsd_examination(
         vetis: Vetis,
         begin_date: str,
         end_date: str,
-        db: Session,
+        db: AsyncSession,
         be_guids: tuple | None = None):
     if not be_guids:
-        enterprises = tuple(get_enterprises(db=db))
+        enterprises = await get_enterprises(db=db)
         enterprises_length = len(enterprises)
         for enterprise in enterprises:
             vet_documents_generator = get_vet_documents(
@@ -85,10 +82,12 @@ async def backgraund_vsd_examination(
             except XMLParseError:
                 logger.info(f'Не удалось получить площадки для предприятия {guid}')
                 continue
+            if enterprises is None:
+                continue
             for enterprise in enterprises.location:
                 if enterprise.enterprise.address.region.guid != '4f8b1a21-e4bb-422f-9087-d3cbf4bebc14':
                     continue
-                save_enterprise(
+                await save_enterprise(
                     db=db,
                     enterprise=EnterpriseSchema(
                         enterprise_guid=enterprise.enterprise.guid,

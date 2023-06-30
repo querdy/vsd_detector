@@ -47,14 +47,14 @@
                 Stop Tasks
               </button>
             </div>
-            <div class="input-group m-1">
-              <button
-                  class="form-control btn btn-primary btn-sm"
-                  type="button"
-                  @click="get_report">
-                Получить отчет
-              </button>
-            </div>
+<!--            <div class="input-group m-1">-->
+<!--              <button-->
+<!--                  class="form-control btn btn-primary btn-sm"-->
+<!--                  type="button"-->
+<!--                  @click="get_report">-->
+<!--                Получить отчет-->
+<!--              </button>-->
+<!--            </div>-->
           </form>
         </div>
       </div>
@@ -93,7 +93,7 @@ const state = reactive({
 
 getIsTasks()
 
-const ws = new WebSocket("ws://localhost:8000/ws")
+const ws = new WebSocket("ws://boyara.space/ws")
 
 ws.onmessage = function (event) {
   let data = JSON.parse(event.data)

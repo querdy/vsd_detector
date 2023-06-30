@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 
 from loguru import logger
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from zeep.exceptions import XMLParseError
 
 from app import settings
@@ -187,7 +187,7 @@ def verified_purpose(vet_document) -> bool:
         if vet_document.certifiedConsignment.batch.productType == 2 and vet_document.authentication.purpose.guid == "5b91502d-e089-11e1-bcf3-b499babae7ea":
             return True
         logger.info(
-            f'Выбрана цель {purposes[vet_document.authentication.purpose.guid]} - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}')
+            f'Выбрана цель {failed_purpose[vet_document.authentication.purpose.guid]} - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}')
         raise VSDValidationError(f'Явно ошибочная цель')
     return True
 
@@ -213,7 +213,7 @@ class Validator:
         "PRODUCTIVE": [verified_expiration_date]
     }
 
-    def __init__(self, vet_document, vetis: Vetis, db: Session):
+    def __init__(self, vet_document, vetis: Vetis, db: AsyncSession):
         self.vetis = vetis
         self.vet_document = vet_document
         self.validators = None
@@ -221,7 +221,7 @@ class Validator:
         self.db = db
 
     async def run(self):
-        if get_checked_document_by_vet_document_uuid(
+        if await get_checked_document_by_vet_document_uuid(
                 db=self.db,
                 vet_document_uuid=self.vet_document.uuid):
             logger.info(f'ВСД уже проверен')
@@ -232,7 +232,7 @@ class Validator:
             if self.errors:
                 await notifier.push(str(LogMsgSchema(
                     message=f'{self.vet_document.uuid} - {self.errors} - {self.vet_document.statusChange[0].specifiedPerson.fio}')))
-            self.save()
+            await self.save()
         else:
             logger.info(f'Сертефикат РСХН (импорт)')
 
@@ -258,8 +258,8 @@ class Validator:
                 vet_document_form = 'NOTE4_PRODUCTS'
         self.validators = self.validators_mapper.get(vet_document_form)
 
-    def save(self):
-        save_vet_document(
+    async def save(self):
+        await save_vet_document(
             db=self.db,
             vet_document=CheckedDocumentSchema(
                 vet_document_uuid=self.vet_document.uuid,

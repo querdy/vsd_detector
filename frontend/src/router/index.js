@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import EnterpriseFinderView from "@/views/EnterpriseFinderView.vue";
 import VSDExaminatorWithXlsx from "@/views/VSDExaminatorWithXlsx.vue";
 import VSDExaminatorWithoutXlsx from "@/views/VSDExaminatorWithoutXlsx.vue";
+import ReportView from "@/views/ReportView.vue";
 
 const routes = [
     {
@@ -18,6 +19,11 @@ const routes = [
         path: '/enterprise_finder',
         name: 'enterpriseFinder',
         component: EnterpriseFinderView
+    },
+    {
+        path: '/report',
+        name: 'report',
+        component: ReportView
     }
 
 ]

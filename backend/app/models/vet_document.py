@@ -1,15 +1,18 @@
+import datetime
+
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database.db import Base
-from sqlalchemy import Integer, Column, String, Boolean, DateTime
 
 
 class CheckedDocument(Base):
     __tablename__ = 'checked_document'
 
-    uuid = Column(Integer, primary_key=True, index=True)
-    saved_datetime = Column(DateTime)
-    vet_document_uuid = Column(String)
-    is_mistakes = Column(Boolean)
-    person = Column(String)
-    description = Column(String)
+    uuid: Mapped[int] = mapped_column(primary_key=True, index=True)
+    saved_datetime: Mapped[datetime.datetime] = mapped_column()
+    vet_document_uuid: Mapped[str] = mapped_column()
+    is_mistakes: Mapped[bool] = mapped_column()
+    person: Mapped[str] = mapped_column()
+    description: Mapped[str] = mapped_column()
 
 
