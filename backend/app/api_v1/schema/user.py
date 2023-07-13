@@ -44,3 +44,11 @@ class CurrentUserSchema(CamelModel):
     user: str
     is_admin: bool
 
+
+class VetisAuthDataSchema(ORJSONParserMixin, CamelModel):
+    enterprise_login: str
+    enterprise_password: str
+    api_key: str
+    service_id: str
+    issuer_id: str
+    initiator: str

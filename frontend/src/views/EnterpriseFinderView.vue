@@ -1,126 +1,86 @@
-<template class="container">
-  <div class="row mw-100">
-    <div class="col-md-7 col-lg-5 col-xl-5">
-      <div class="row d-flex justify-content-center">
-        <div class="col-5">
-          <div class="progress m-1" role="progressbar" aria-label="Progress" aria-valuenow={{state.progress}}
-               aria-valuemin="0" aria-valuemax="100">
-            <div class="progress-bar progress-bar-striped progress-bar-animated" :style="{width: state.progress + '%'}">
-              <div class="mx-1" v-if="state.progress >= 15">{{ state.progress }}%</div>
-            </div>
-            <div class="mx-1" v-if="state.progress < 15 & state.progress > 0">{{ state.progress }}%</div>
-          </div>
+<template>
+  <div class="row d-flex justify-content-center">
+    <div class="col-3 col-xxl-2">
+      <div class="mx-2">{{websocketStore.fileProgress}}</div>
+    </div>
+    <div class="col-7 col-xxl-8">
+      <div class="progress m-1" role="progressbar" aria-label="Progress" aria-valuenow={{websocketStore.progress}}
+           aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" :style="{width: websocketStore.progress + '%'}">
+          <div class="mx-1" v-if="websocketStore.progress >= 50">{{ websocketStore.progress }}%</div>
         </div>
-      </div>
-      <div class="row d-flex justify-content-center">
-        <div class="col-5">
-          <form>
-            <div class="form-outline m-1">
-              <input class="form-control" type="file" @change="addDocument" accept=".xlsx"/>
-            </div>
-            <div class="form-outline m-1">
-              <button v-if="state.isRunVsdExam" class="form-control btn btn-primary btn-sm" type="button" disabled>Run ent. find</button>
-              <button v-else class="form-control btn btn-primary btn-sm" type="button" @click="run_enterprise_finder">Run ent. find</button>
-            </div>
-            <div class="form-outline m-1">
-              <button v-if="state.isRunVsdExam" class="form-control btn btn-danger btn-sm" type="button" @click="stopTasks">Stop Tasks</button>
-              <button v-else class="form-control btn btn-danger btn-sm" type="button" disabled>Stop Tasks</button>
-            </div>
-          </form>
-        </div>
-      </div>
-      <div class="m-1 d-flex justify-content-center">
-        <img v-if="state.isRunVsdExam" src="@/assets/anime-hearts.gif" width="325" alt="eat">
+        <div class="mx-1" v-if="websocketStore.progress < 50 & websocketStore.progress > 0">{{ websocketStore.progress }}%</div>
       </div>
     </div>
-    <div class="col-md-8 col-lg-7 col-xl-6">
-      <ul class="list-group" v-for="msg in state.log">
-        <li class="list-group-item">{{ msg }}</li>
-      </ul>
+  </div>
+  <div class="row d-flex justify-content-center">
+    <div class="col-10">
+      <div class="mx-2">prediction: {{websocketStore.prediction}}</div>
     </div>
+  </div>
+  <div class="row d-flex justify-content-center">
+    <div class="col-10">
+      <form>
+        <div class="form-outline m-1">
+          <input class="form-control" type="file" multiple @change="addDocument" accept=".xlsx, .xls"/>
+        </div>
+        <div class="form-outline m-1">
+          <button v-if="websocketStore.isRun" class="form-control btn btn-primary btn-sm" type="button" disabled>Run ent. find</button>
+          <button v-else class="form-control btn btn-primary btn-sm" type="button" @click="run_enterprise_finder">Run ent. find</button>
+        </div>
+        <div class="form-outline m-1">
+          <button v-if="websocketStore.isRun" class="form-control btn btn-danger btn-sm" type="button" @click="stopTasks">Stop Tasks</button>
+          <button v-else class="form-control btn btn-danger btn-sm" type="button" disabled>Stop Tasks</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="m-1 d-flex justify-content-center">
+    <img class="w-75" v-if="websocketStore.isRun" src="@/assets/finder.gif" alt="eat">
   </div>
 </template>
 
 <script setup>
-import {reactive} from "vue";
-import API from "@/plugins/axios";
+import {onMounted, reactive} from "vue";
+import API from "@/services/axios";
+import {useWebsocketStore} from "@/stores/WebsocketStore";
 
+const websocketStore = useWebsocketStore()
 const state = reactive({
-  isLoading: false,
-  isRunVsdExam: false,
-  log: [],
-  progress: 0,
-  activeUser: '',
-  user: {
-    login: '',
-    password: '',
-  },
-  dateInterval: {
-    dateFrom: '',
-    dateTo: ''
-  },
-  uploadFile: null,
+  uploadFile: [],
 })
-
-getIsTask()
-
-const ws = new WebSocket("ws://boyara.space/ws")
-
-ws.onmessage = function (event) {
-  let data = JSON.parse(event.data)
-  if (data.channel === 'log') {
-    if (state.log.length < 13) {
-      state.log.unshift(data.message)
-    } else {
-      state.log.pop()
-      state.log.unshift(data.message)
-    }
-  } else if (data.channel === 'progress') {
-    state.progress = Number(data.message).toFixed(2)
-  }
-}
 
 async function stopTasks() {
   const response = await API.get('vetis/cancel_tasks')
   if (response.status === 200) {
-    state.isRunVsdExam = false
-    state.progress = 0
+    await websocketStore.setIsRun(false)
+    await websocketStore.setProgress(0)
+    await websocketStore.setFileProgress('0/0')
+    await websocketStore.setPrediction('')
   }
 }
-
-async function getIsTask() {
-  const response = await API.get('vetis/is_running')
-  if (response.status === 200) {
-    state.isRunVsdExam = response.data.detail === true;
-  }
-}
-
 
 async function run_enterprise_finder() {
-  state.isRunVsdExam = true
+  await websocketStore.setIsRun(true)
   let detectorFormData = new FormData();
-  detectorFormData.append("date_interval", JSON.stringify(state.dateInterval))
-  detectorFormData.append('file', state.uploadFile)
+  state.uploadFile.forEach((file) => detectorFormData.append('files', file));
   try {
     await API.post('vetis/run_enterprise_finder', detectorFormData, {headers: {"Content-Type": "multipart/form-data"}})
   } catch (error) {
     console.log('Проверка уже запущена')
   }
-  await getIsTask()
 }
 
 
 function addDocument(event) {
-  state.uploadFile = event.target.files[0]
+  state.uploadFile = []
+  let selectedFiles = event.target.files;
+  for (let i = 0; i < selectedFiles.length; i++) {
+    state.uploadFile.push(selectedFiles[i]);
+  }
 }
 </script>
 
 <style scoped>
-.btn:focus {
-  background-color: #0d6efd;
-  color: #fff;
-  border-color: #0d6efd;
-  box-shadow: None;
-}
 
 </style>

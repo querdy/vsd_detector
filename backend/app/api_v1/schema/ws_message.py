@@ -27,3 +27,18 @@ class SuccessMsgSchema(BaseWSMsgSchema):
 class ProgressMsgSchema(BaseWSMsgSchema):
     channel: str = 'progress'
 
+
+class VSDProgressMsgSchema(BaseWSMsgSchema):
+    channel: str = 'vsd_progress'
+
+
+class FileMsgSchema(BaseWSMsgSchema):
+    channel: str = 'file'
+
+
+class CompleteMsgSchema(BaseWSMsgSchema):
+    channel: str = 'complete'
+
+
+class PredictionMsgSchema(BaseWSMsgSchema):
+    channel: str = 'prediction'

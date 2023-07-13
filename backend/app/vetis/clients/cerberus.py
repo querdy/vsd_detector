@@ -1,7 +1,11 @@
-from httpx import ReadTimeout
+import zeep
+from httpx import RequestError
 from loguru import logger
+from zeep.exceptions import Error
 
 from app.vetis.base import Base
+from app.vetis.decorators import _repeat
+from app.vetis.exceptions import VetisNotResultError
 
 
 class Cerberus(Base):
@@ -10,7 +14,7 @@ class Cerberus(Base):
                  enterprise_login: str,
                  enterprise_password: str,
                  ):
-        self.client_cerberus = self._create_client(wsdl, enterprise_login, enterprise_password)
+        self.client_cerberus = self._create_client(wsdl, enterprise_login, enterprise_password, settings=zeep.Settings(strict=False))
         self.factory_cerberus = self._create_factory(self.client_cerberus)
 
     async def get_business_entity_guid_by_inn(self, inn: str):
@@ -19,7 +23,6 @@ class Cerberus(Base):
                 inn=inn
             )
         )
-        # print(response)
         try:
             return response.businessEntity[0].guid
         except IndexError:
@@ -31,8 +34,8 @@ class Cerberus(Base):
                 guid=guid
             )
             return response
-        except ReadTimeout:
-            logger.info(f'ReadTimeout')
+        except RequestError as err:
+            logger.error(err)
 
     async def get_business_entity_by_guid(self, guid: str):
         respone = await self.client_cerberus.service.GetBusinessEntityByGuid(
@@ -40,6 +43,7 @@ class Cerberus(Base):
         )
         return respone
 
+    @_repeat(count=2)
     async def get_activity_location_list(self, guid: str):
         try:
             response = await self.client_cerberus.service.GetActivityLocationList(
@@ -48,17 +52,18 @@ class Cerberus(Base):
                 )
             )
             return response
-        except ReadTimeout:
-            logger.info(f'ReadTimeout')
+        except (Error, RequestError) as err:
+            logger.error(err)
+            raise VetisNotResultError(f'Не удалось получить результат запроса')
 
-    async def get_russian_enterprise_list(self):
+    async def get_russian_enterprise_list(self, guid: str = 'd7d0a0bf-9ca1-4f96-bf88-4017ae7928a5'):
         response = await self.client_cerberus.service.GetRussianEnterpriseList(
             listOptions=self.factory_cerberus.ns1.ListOptions(
                 count=500,
                 offset=0,
             ),
             enterprise=self.factory_cerberus.ns3.Enterprise(
-                guid='d7d0a0bf-9ca1-4f96-bf88-4017ae7928a5'
+                guid=guid
             )
             # enterprise=self.factory_cerberus.ns3.Enterprise(
             #     address=self.factory_cerberus.ns3.Address(
@@ -71,4 +76,4 @@ class Cerberus(Base):
             #     )
             # )
         )
-        print(response)
+        return response

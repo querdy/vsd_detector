@@ -1,14 +1,14 @@
 import asyncio
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from zeep.exceptions import XMLParseError
 
 from app import settings
-from app.api_v1.crud.vet_document import get_checked_document_by_vet_document_uuid, save_vet_document
+from app.api_v1.crud.vet_document import save_vet_document
 from app.api_v1.schema.vet_document import CheckedDocumentSchema
 from app.api_v1.schema.ws_message import LogMsgSchema
 from app.api_v1.websocket import notifier
@@ -18,14 +18,14 @@ from app.vetis import Vetis
 enterprise_cache = Cache(16)
 quarantine_cache = Cache(16)
 
-with open(settings.BASE_DIR/'app/static/failed_purpose.json', 'r', encoding='utf-8') as f:
+with open(settings.BASE_DIR / 'app/static/failed_purpose.json', 'r', encoding='utf-8') as f:
     failed_purpose = json.load(f)
 
-with open(settings.BASE_DIR/'app/static/quarantine_purpose.json', 'r', encoding='utf-8') as f:
+with open(settings.BASE_DIR / 'app/static/quarantine_purpose.json', 'r', encoding='utf-8') as f:
     quarantine_purpose = json.load(f)
 
-with open(settings.BASE_DIR/'app/static/lab_name.json', 'r', encoding='utf-8') as f:
-    laboratories = set(json.load(f))
+# with open(settings.BASE_DIR / 'app/static/lab_name.json', 'r', encoding='utf-8') as f:
+#     laboratories = set(json.load(f))
 
 
 def verified_vse(vet_document) -> bool:
@@ -36,6 +36,24 @@ def verified_vse(vet_document) -> bool:
                 f'"Не подвергнуто ВСЭ" - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}')
             raise VSDValidationError(f'Не подвергнуто ВСЭ')
     return True
+
+
+def verified_moving_period(vet_document) -> bool:
+    if (vet_document.certifiedConsignment.consignor.enterprise.guid !=
+            vet_document.certifiedConsignment.consignee.enterprise.guid and
+            vet_document.vetDStatus == 'UTILIZED'):
+        confirmed_time = None
+        utilized_time = None
+        for change in vet_document.statusChange:
+            if change.status == 'CONFIRMED':
+                confirmed_time = change.actualDateTime
+            elif change.status == 'UTILIZED':
+                utilized_time = change.actualDateTime
+        if utilized_time - confirmed_time < timedelta(minutes=10):
+            raise VSDValidationError(f'Слишком быстрое гашение')
+        elif utilized_time - confirmed_time > timedelta(days=30):
+            raise VSDValidationError(f'Слишком позднее гашение')
+        return True
 
 
 def verified_packing(vet_document) -> bool:
@@ -56,14 +74,19 @@ async def verified_consignee_enterprise(vet_document, vetis: Vetis) -> bool:
         case False:
             raise VSDValidationError(f'ВСД оформлен на неподтвержденную площадку')
         case None:
-            try:
+            # try:
+            for index in range(3):
                 responsed_enterprise = await vetis.cerberus.get_enterprise_by_guid(consignee_guid)
-                if responsed_enterprise is None:
-                    return False
-            except XMLParseError:
+                if responsed_enterprise is not None:
+                    break
+            if responsed_enterprise is None:
                 logger.info(f'Не удалось получить данные площадки')
-                enterprise_cache[consignee_guid] = True
                 return False
+            # except XMLParseError:
+            #     logger.info(f'fail ent guid: {consignee_guid}')
+            #     logger.info(f'Не удалось получить данные площадки')
+            #     enterprise_cache[consignee_guid] = True
+            #     return False
             if responsed_enterprise.registryStatus != 'VERIFIED':
                 enterprise_cache[consignee_guid] = False
                 # verified_consignee_enterprise_chache.update({consignee_guid: False})
@@ -85,7 +108,7 @@ def verified_producer_enterprise_count(vet_document) -> bool:
 
 
 def verified_animal_spent_period(vet_document) -> bool:
-    if not vet_document.authentication.animalSpentPeriod == 'ZERO':
+    if vet_document.authentication.animalSpentPeriod == 'ZERO':
         logger.info(
             f'Животные не находились на территории ТС - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}')
         raise VSDValidationError(f'Животные не находились на территории ТС')
@@ -94,25 +117,40 @@ def verified_animal_spent_period(vet_document) -> bool:
 
 def verified_transport_storage_type(vet_document) -> bool:
     if vet_document.certifiedConsignment.batch.productType == 3:
-        if vet_document.certifiedConsignment.transportStorageType != 'VENTILATED':
+        if vet_document.certifiedConsignment.batch.product.uuid == 'fb1d6f04-8fd4-4f53-be96-9e6e2bb0868a':
+            if vet_document.certifiedConsignment.transportStorageType != 'FROZEN':
+                logger.info(
+                    f'Для замороженной продукции способ перевозки не "замороженный"'
+                    f' - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}'
+                )
+                raise VSDValidationError(f'Для замороженной продукции способ перевозки не "замороженный"')
+        elif vet_document.certifiedConsignment.transportStorageType != 'VENTILATED':
             logger.info(
-                f'Для живых животных условия перевозки не "вентелируемый" - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}')
+                f'Для живых животных условия перевозки не "вентелируемый"'
+                f' - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}'
+            )
             raise VSDValidationError(f'Для живых животных условия перевозки не "вентелируемый"')
     elif ' охл' in vet_document.certifiedConsignment.batch.productItem.name:
         if vet_document.certifiedConsignment.transportStorageType != 'CHILLED':
             logger.info(
-                f'Для охлажденной продукции способ перевозки не "охлажденный" - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}')
+                f'Для охлажденной продукции способ перевозки не "охлажденный"'
+                f' - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}'
+            )
             raise VSDValidationError(f'Для охлажденной продукции способ перевозки не "охлажденный"')
     elif ' зам' in vet_document.certifiedConsignment.batch.productItem.name or \
             'морож' in vet_document.certifiedConsignment.batch.productItem.name:
         if vet_document.certifiedConsignment.transportStorageType != 'FROZEN':
             logger.info(
-                f'Для замороженной продукции способ перевозки не "замороженный" - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}')
+                f'Для замороженной продукции способ перевозки не "замороженный"'
+                f' - {vet_document.uuid} - {vet_document.statusChange[0].specifiedPerson.fio}'
+            )
             raise VSDValidationError(f'Для замороженной продукции способ перевозки не "замороженный"')
     return True
 
 
 def verified_expiration_date(vet_document) -> bool:
+    if vet_document.certifiedBatch.batch.productType == 3:
+        return True
     try:
         if vet_document.certifiedBatch.batch.dateOfProduction.secondDate is None and \
                 vet_document.certifiedBatch.batch.expiryDate.secondDate is None:
@@ -133,26 +171,32 @@ def verified_expiration_date(vet_document) -> bool:
 async def verified_quarantine(vet_document, vetis: Vetis) -> bool:
     consignor_region_guid = quarantine_cache.get(vet_document.certifiedConsignment.consignor.enterprise.guid)
     consignee_region_guid = quarantine_cache.get(vet_document.certifiedConsignment.consignee.enterprise.guid)
-    try:
-        if consignor_region_guid is None:
-            consignor_region_guid = await vetis.cerberus.get_enterprise_by_guid(
-                vet_document.certifiedConsignment.consignor.enterprise.guid)
-            quarantine_cache[vet_document.certifiedConsignment.consignor.enterprise.guid] = consignor_region_guid
-    except XMLParseError:
-        logger.info(
-            f'Не удалось получить данные площадки '
-            f'{vet_document.certifiedConsignment.consignor.enterprise.guid}'
-        )
-        return False
-    try:
-        if consignee_region_guid is None:
-            consignee_region_guid = await vetis.cerberus.get_enterprise_by_guid(
-                vet_document.certifiedConsignment.consignee.enterprise.guid)
-            quarantine_cache[vet_document.certifiedConsignment.consignee.enterprise.guid] = consignee_region_guid
-    except XMLParseError:
-        logger.info(
-            f'Не удалось получить данные площадки {vet_document.certifiedConsignment.consignee.enterprise.guid}')
-        return False
+
+    if consignor_region_guid is None:
+        for index in range(3):
+            consignor = await vetis.cerberus.get_enterprise_by_guid(
+                vet_document.certifiedConsignment.consignor.enterprise.guid
+            )
+            if consignor is not None:
+                break
+        if consignor is None:
+            logger.info(f'Не удалось получить данные площадки')
+            return False
+        consignor_region_guid = consignor.address.region.guid
+        quarantine_cache[vet_document.certifiedConsignment.consignor.enterprise.guid] = consignor_region_guid
+
+    if consignee_region_guid is None:
+        for index in range(3):
+            consignee = await vetis.cerberus.get_enterprise_by_guid(
+                vet_document.certifiedConsignment.consignee.enterprise.guid
+            )
+            if consignee is not None:
+                break
+        if consignee is None:
+            logger.info(f'Не удалось получить данные площадки')
+            return False
+        consignee_region_guid = consignee.address.region.guid
+        quarantine_cache[vet_document.certifiedConsignment.consignee.enterprise.guid] = consignee_region_guid
 
     if consignor_region_guid is None or consignee_region_guid is None:
         return False
@@ -170,6 +214,7 @@ async def verified_quarantine(vet_document, vetis: Vetis) -> bool:
 
 def verified_laboratory(vet_document) -> bool:
     reg = re.compile('[^a-zA-ZА-Яа-я0-9 ]')
+    # print(vet_document)
     for research in vet_document.authentication.laboratoryResearch:
         try:
             if reg.sub('', research.operator.name) not in laboratories:
@@ -198,17 +243,17 @@ class VSDValidationError(Exception):
 
 class Validator:
     validators_mapper = {
-        "LIC1": [verified_consignee_enterprise, verified_producer_enterprise_count, verified_animal_spent_period,
-                 verified_transport_storage_type, verified_quarantine, verified_laboratory, verified_purpose],
-        "LIC2": [verified_producer_enterprise_count, verified_vse, verified_packing, verified_consignee_enterprise,
-                 verified_laboratory, verified_purpose],
-        "LIC3": [verified_producer_enterprise_count, verified_vse, verified_packing, verified_consignee_enterprise,
-                 verified_laboratory, verified_purpose],
-        "NOTE4_ANIMALS": [verified_animal_spent_period, verified_transport_storage_type,
-                          verified_producer_enterprise_count, verified_consignee_enterprise, verified_laboratory,
+        "LIC1": [verified_moving_period, verified_consignee_enterprise, verified_producer_enterprise_count,
+                 verified_animal_spent_period, verified_transport_storage_type, verified_quarantine, verified_purpose],
+        "LIC2": [verified_moving_period, verified_producer_enterprise_count, verified_vse, verified_packing,
+                 verified_consignee_enterprise, verified_purpose],
+        "LIC3": [verified_moving_period, verified_producer_enterprise_count, verified_vse, verified_packing,
+                 verified_consignee_enterprise, verified_purpose],
+        "NOTE4_ANIMALS": [verified_moving_period, verified_animal_spent_period, verified_transport_storage_type,
+                          verified_producer_enterprise_count, verified_consignee_enterprise,
                           verified_purpose],
-        "NOTE4_PRODUCTS": [verified_vse, verified_packing, verified_transport_storage_type,
-                           verified_producer_enterprise_count, verified_consignee_enterprise, verified_laboratory,
+        "NOTE4_PRODUCTS": [verified_moving_period, verified_vse, verified_packing, verified_transport_storage_type,
+                           verified_producer_enterprise_count, verified_consignee_enterprise,
                            verified_purpose],
         "PRODUCTIVE": [verified_expiration_date]
     }
@@ -221,11 +266,6 @@ class Validator:
         self.db = db
 
     async def run(self):
-        if await get_checked_document_by_vet_document_uuid(
-                db=self.db,
-                vet_document_uuid=self.vet_document.uuid):
-            logger.info(f'ВСД уже проверен')
-            return
         self.set_validators()
         if self.validators is not None:
             await self.validate()

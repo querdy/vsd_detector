@@ -1,4 +1,5 @@
 from starlette.websockets import WebSocket
+from websockets.exceptions import ConnectionClosedError
 
 
 class Notifier:
@@ -19,14 +20,20 @@ class Notifier:
         self.connections.append(websocket)
 
     def remove(self, websocket: WebSocket):
-        self.connections.remove(websocket)
+        try:
+            self.connections.remove(websocket)
+        except ValueError:
+            pass
 
     async def _notify(self, message: str):
         living_connections = []
         while len(self.connections) > 0:
-            websocket = self.connections.pop()
-            await websocket.send_text(message)
-            living_connections.append(websocket)
+            try:
+                websocket = self.connections.pop()
+                await websocket.send_text(message)
+                living_connections.append(websocket)
+            except ConnectionClosedError:
+                pass
         self.connections = living_connections
 
 

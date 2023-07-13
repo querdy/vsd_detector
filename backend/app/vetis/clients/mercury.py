@@ -1,26 +1,13 @@
 import asyncio
 import datetime
 
-from httpx import ReadTimeout
+from httpx import RequestError
 from loguru import logger
 from zeep import xsd
 
 from app.vetis.base import Base
-
-
-def _push(method):
-    def wrapper(self, *args, **kwargs):
-        return self._push_request(method(self, *args, **kwargs))
-
-    return wrapper
-
-
-class VetisRejectedError(Exception):
-    ...
-
-
-class VetisBadServerError(Exception):
-    ...
+from app.vetis.decorators import _push
+from app.vetis.exceptions import VetisBadServerError, VetisRejectedError
 
 
 class Mercury(Base):
@@ -58,33 +45,41 @@ class Mercury(Base):
 
     async def get_response(self, application_id: str = None):
         application_id = application_id or self.last_application_id
-        response = await self.client_mercury.service.receiveApplicationResult(
-            apiKey=self.api_key,
-            issuerId=self.issuer_id,
-            applicationId=application_id)
-        logger.debug(response)
-        return response
+        try:
+            response = await self.client_mercury.service.receiveApplicationResult(
+                apiKey=self.api_key,
+                issuerId=self.issuer_id,
+                applicationId=application_id)
+            logger.debug(response)
+            return response
+        except RequestError as err:
+            print(f'err: {err}')
+            logger.error(err)
 
-    async def get_finished_response(self, application_id: str = None, iterations: int = 30):
+    async def get_finished_response(self, application_id: str = None, iterations: int = 50):
         application_id = application_id or self.last_application_id
-        for index in range(iterations):
-            logger.info(f'Попытка получения ответа {index + 1}')
-            await asyncio.sleep(1)
+        while True:
+            logger.info(f'Попытка получения ответа. appl.id: {application_id}')
+            response = None
             try:
                 response = await self.client_mercury.service.receiveApplicationResult(
                     apiKey=self.api_key,
                     issuerId=self.issuer_id,
                     applicationId=application_id)
-            except ReadTimeout:
-                logger.info(f'ReadTimeout')
-            if index == iterations - 1 and response.status == 'IN_PROCESS':
-                raise VetisBadServerError('Сервер не в настроении')
+            except RequestError as err:
+                logger.info(err)
+            if response is None:
+                continue
+            if response.status == 'IN_PROCESS':
+                logger.info(f'in_process')
+                await asyncio.sleep(1)
+                continue
             if response.status == 'COMPLETED':
                 return response
             elif response.status == 'REJECTED':
                 logger.info(f'заявка отклонена appl. id - {application_id} - {response.errors.error[0]._value_1}')
                 raise VetisRejectedError('Заявка отклонена')
-            # await asyncio.sleep(1)
+            await asyncio.sleep(1)
 
     @_push
     def get_business_entity_user(self,
@@ -107,7 +102,7 @@ class Mercury(Base):
                              owner_guid: str,
                              enterprise_guid: str,
                              local_transaction_id: str = "Boyara©",
-                             count: int = 10,
+                             count: int = 100,
                              offset: int = 0
                              ):
         _element = self.client_mercury.get_element('ns4:getStockEntryListRequest')
@@ -131,7 +126,7 @@ class Mercury(Base):
                                       begin_date: datetime.datetime,
                                       end_date: datetime.datetime,
                                       local_transaction_id: str = "Boyara©",
-                                      count: int = 500,
+                                      count: int = 1000,
                                       offset: int = 0
                                       ):
         _element = self.client_mercury.get_element('ns4:getVetDocumentChangesListRequest')

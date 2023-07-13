@@ -27,3 +27,9 @@ async def get_mistakes_documents(db: AsyncSession, limit: int = None, offset: in
     result = await db.execute(select(models.CheckedDocument).filter_by(is_mistakes=True).limit(limit).offset(offset))
     scalar = result.scalars().all()
     return scalar
+
+
+async def get_vet_documents_by_uuid_list(db: AsyncSession, documents: list[str]):
+    result = await db.execute(select(models.CheckedDocument.vet_document_uuid).where(models.CheckedDocument.vet_document_uuid.in_(documents)))
+    scalar = result.scalars().all()
+    return scalar

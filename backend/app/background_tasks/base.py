@@ -2,11 +2,10 @@ import asyncio
 from asyncio import CancelledError
 from typing import Callable
 
-
-__all__ = ['add_bg_task', 'get_tasks', 'cancel_tasks']
-
 from httpx import ReadTimeout
 from loguru import logger
+
+__all__ = ['add_bg_task', 'get_tasks', 'cancel_tasks']
 
 _background_tasks: set[asyncio.Task] = set()
 
@@ -15,11 +14,11 @@ def exception_trap(task: asyncio.Task):
     try:
         task.result()
     except ReadTimeout as e:
-        logger.error(f'{e}')
+        logger.error(f'ReadTimeout (trap) - {e}')
     except CancelledError:
         logger.debug(f'Корутины предварительно прерваны')
-    except Exception:
-        logger.exception('Неизвестная ошибка = %r', task)
+    except Exception as err:
+        logger.error(f'Неизвестная ошибка = {err}')
 
 
 async def add_bg_task(func: Callable, **kwargs):

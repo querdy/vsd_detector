@@ -1,36 +1,37 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import EnterpriseFinderView from "@/views/EnterpriseFinderView.vue";
-import VSDExaminatorWithXlsx from "@/views/VSDExaminatorWithXlsx.vue";
-import VSDExaminatorWithoutXlsx from "@/views/VSDExaminatorWithoutXlsx.vue";
-import ReportView from "@/views/ReportView.vue";
+import HomeView from '../views/HomeView.vue'
 
 const routes = [
-    {
-        path: '/',
-        name: 'vsd_examinator_without_xlsx',
-        component: VSDExaminatorWithoutXlsx
-    },
-    {
-        path: '/vsd_examinator_with_xlsx',
-        name: 'vsd_examinator_with_xlsx',
-        component: VSDExaminatorWithXlsx
-    },
-    {
-        path: '/enterprise_finder',
-        name: 'enterpriseFinder',
-        component: EnterpriseFinderView
-    },
-    {
-        path: '/report',
-        name: 'report',
-        component: ReportView
-    }
-
+  {
+    path: '/',
+    name: 'home',
+    component: HomeView
+  },
+  {
+    path: '/vsd_examine',
+    name: 'vsd_examine',
+    component: () => import('../views/VSDExaminationView.vue')
+  },
+  {
+    path: '/enterprise_finder',
+    name: 'enterpriseFinder',
+    component: () => import('../views/EnterpriseFinderView.vue')
+  },
+  {
+    path: '/report',
+    name: 'report',
+    component: () => import('../views/ReportView.vue')
+  },
+  {
+    path: '/account',
+    name: 'account',
+    component: () => import('../views/AccountView.vue')
+  }
 ]
 
 const router = createRouter({
-    history: createWebHistory(),
-    routes
+  history: createWebHistory(process.env.BASE_URL),
+  routes
 })
 
 export default router

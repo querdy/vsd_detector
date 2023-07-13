@@ -1,7 +1,8 @@
+import re
 import secrets
 from pathlib import Path
 
-from pydantic import BaseSettings, validator
+from pydantic import BaseSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -16,6 +17,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 seconds * 60 minutes * 24 hours = 1 days
     ACCESS_TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 24
+    GUID_PATTERN = re.compile('[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}')
+    MAIN_REGION_GUID = '4f8b1a21-e4bb-422f-9087-d3cbf4bebc14'
 
     WSDL_MERCURY: str = 'http://api.vetrf.ru/schema/platform/services/2.0-last/ams-mercury-vu.service_v2.0_production.wsdl'
     WSDL_ICAR: str = 'http://api.vetrf.ru/schema/platform/services/2.1-RC-last/IkarService_v2.1_production.wsdl'
